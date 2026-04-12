@@ -1,13 +1,16 @@
 package main
 
 import (
-	"strconv"
-
+	"fmt"
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
+	"strconv"
 )
 
-type Otw struct {
-	Result string
+var validate *validator.Validate
+
+func init() {
+	validate = validator.New()
 }
 
 func main() {
@@ -39,11 +42,18 @@ func main() {
 		return c.JSON(ot)
 	})
 
-	app.Post("/feedback ", func(c *fiber.Ctx) error {
+	app.Post("/feedback", func(c *fiber.Ctx) error {
 		ot := Feedback{}
-		c.BodyParser(&ot)
-		message = append(message, ot.Message)
 		var response Response
+		c.BodyParser(&ot)
+		err := validate.Struct(ot)
+		if err != nil {
+			fmt.Println("Validation failed:", err)
+			response.Message = "Использование недопустимых слов"
+			return c.JSON(response)
+		}
+		message = append(message, ot.Message)
+
 		response.Message = "Feedback received. Thank you, " + ot.Name + " ."
 		return c.JSON(response)
 	})

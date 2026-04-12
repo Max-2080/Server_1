@@ -6,10 +6,14 @@ type User struct {
 }
 
 type Feedback struct {
-	Name    string
-	Message string
+	Name    string `validate:"required,min=2,max=50"`
+	Message string `validate:"required,min=10,max=500"`
 }
 
 type Response struct {
 	Message string
+}
+
+type Otw struct {
+	Result string
 }
