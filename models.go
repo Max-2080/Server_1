@@ -7,7 +7,7 @@ type User struct {
 
 type Feedback struct {
 	Name    string `validate:"required,min=2,max=50"`
-	Message string `validate:"required,min=10,max=500"`
+	Message string `validate:"required,min=10,max=500,excludes=qwerty|i|вайб"`
 }
 
 type Response struct {
