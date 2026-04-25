@@ -7,12 +7,6 @@ import (
 	"strconv"
 )
 
-var validate *validator.Validate
-
-func init() {
-	validate = validator.New()
-}
-
 func main() {
 	app := fiber.New()
 	var message []string
@@ -43,19 +37,25 @@ func main() {
 	})
 
 	app.Post("/feedback", func(c *fiber.Ctx) error {
+
+		validate := validator.New()
+		validate.RegisterValidation("no_forbidden_words", noForbiddenWords)
+
 		ot := Feedback{}
 		var response Response
 		c.BodyParser(&ot)
 		err := validate.Struct(ot)
+
 		if err != nil {
-			fmt.Println("Validation failed:", err)
-			response.Message = "Использование недопустимых слов"
+			validationErrors := err.(validator.ValidationErrors)
+			fmt.Println("Validation failed:", validationErrors)
+			response.Message = append(response.Message, validationErrors.Error())
+			c.SendStatus(422)
 			return c.JSON(response)
 		}
 		message = append(message, ot.Message)
 
-		response.Message = "Feedback received. Thank you, " + ot.Name + " ."
-		return c.JSON(response)
+		return c.SendString("Feedback received. Thank you, " + ot.Name + " .")
 	})
 
 	app.Listen(":3000")
