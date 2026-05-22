@@ -36,3 +36,8 @@ type Login struct {
 	Username string
 	Password string
 }
+
+type CommonHeaders struct {
+	User_Agent      string `validate:"required"`
+	Accept_Language string `validate:"required"`
+}

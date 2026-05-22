@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"log"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -20,20 +22,24 @@ func generateSignature(userID string) string {
 }
 
 // Проверка подписи и извлечение user_id
-func verifyAndExtractUserID(sessionToken string) (string, bool) {
-	parts := strings.Split(sessionToken, ":")
-	if len(parts) != 2 {
-		return "", false
+func verifyAndExtractUserID(sessionToken string) (string, int, bool) {
+	parts := strings.Split(sessionToken, ".")
+	if len(parts) != 3 {
+		return "", 0, false
 	}
 
 	userID := parts[0]
-	receivedSignature := parts[1]
+	times, err := strconv.Atoi(parts[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+	receivedSignature := parts[2]
 
 	// Перевычисляем подпись
 	expectedSignature := generateSignature(userID)
 
 	// Сравниваем (constant-time comparison для безопасности)
-	return userID, hmac.Equal([]byte(receivedSignature), []byte(expectedSignature))
+	return userID, times, hmac.Equal([]byte(receivedSignature), []byte(expectedSignature))
 }
 
 func main() {
@@ -44,13 +50,13 @@ func main() {
 	app.Post("/login", func(c *fiber.Ctx) error {
 		login := Login{}
 		c.BodyParser(&login)
-
 		c.Cookie(&fiber.Cookie{
 			Name:     "session_token",
-			Value:    "dark_mode",
+			Value:    login.Username + "." + strconv.Itoa(int(time.Now().Unix())) + "." + generateSignature(login.Username),
 			HTTPOnly: true,
-			Expires:  time.Now().Add(24 * time.Hour),
-			Path:     "/",
+			//Expires:  expires,
+			MaxAge: 300,
+			Path:   "/",
 		})
 		Users = append(Users, login)
 		return c.SendStatus(200)
@@ -65,11 +71,20 @@ func main() {
 			})
 		}
 
-		userid, err := verifyAndExtractUserID(sessionToken)
-		fmt.Println(userid)
-		fmt.Println(sessionToken)
-		if err != true {
+		userid, date, err := verifyAndExtractUserID(sessionToken)
+		if err == false {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "Unauthorized"})
+		}
+		if date+180 < int(time.Now().Unix()) {
+			parts := strings.Split(c.Cookies("session_token"), ".")
+			fmt.Println(parts)
+			c.Cookie(&fiber.Cookie{
+				Name:     "session_token",
+				Value:    parts[0] + "." + strconv.Itoa(int(time.Now().Unix())) + "." + generateSignature(parts[0]), // новое значение
+				MaxAge:   300,
+				HTTPOnly: true,
+				Path:     "/",
+			})
 		}
 		return c.JSON(userid)
 	})
@@ -83,6 +98,32 @@ func main() {
 			})
 		}
 		return c.JSON(Users[0])
+	})
+
+	app.Get("/headers", func(c *fiber.Ctx) error {
+		user_agent := c.Get("User-agent")
+		accept_language := c.Get("Accept-Language")
+		commonheaders := CommonHeaders{}
+		commonheaders.Accept_Language = accept_language
+		commonheaders.User_Agent = user_agent
+		if user_agent == "" || accept_language == "" {
+			return c.Status(fiber.StatusRequestTimeout).JSON(fiber.Map{"message": "NEED HEADERS!"})
+		}
+		return c.JSON(commonheaders)
+	})
+
+	app.Get("/info", func(c *fiber.Ctx) error {
+		user_agent := c.Get("User-agent")
+		accept_language := c.Get("Accept-Language")
+		commonheaders := CommonHeaders{}
+		commonheaders.Accept_Language = accept_language
+		commonheaders.User_Agent = user_agent
+		if user_agent == "" || accept_language == "" {
+			return c.Status(fiber.StatusRequestTimeout).JSON(fiber.Map{"message": "NEED HEADERS!"})
+		}
+		c.Set("X-Server-Time", time.Now().Format(time.RFC3339))
+		return c.JSON(fiber.Map{"CommonHeaders": commonheaders,
+			"message": " Добро пожаловать! Ваши заголовки успешно обработаны."})
 	})
 
 	app.Listen(":3000")
